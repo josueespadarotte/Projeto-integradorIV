@@ -1,7 +1,9 @@
 # Projeto Integrador IV - Assistente de IA para Segurança Rodoviária (Evolução do Painel PRF)
 
 **Alunos:** Josué Filipe Espadarotte, Laisa de Souza Camilo, Mikaelly do Nascimento Cardoso e Victoria Sofia dos Santos Teixeira
+
 **Instituição:** FAESA - Curso de Sistemas de Informação
+
 **Professor:** M.Sc. Howard Cruz Roatti
 
 ## 1. Escopo e Justificativa
