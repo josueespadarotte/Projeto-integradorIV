@@ -6,3 +6,8 @@ plotly
 scikit-learn
 xgboost
 joblib
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic
+httpx
