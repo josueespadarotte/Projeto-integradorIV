@@ -32,10 +32,10 @@ A natureza extensionista deste projeto foca na segurança pública e na eficiên
 
 O desenvolvimento seguirá boas práticas de Engenharia de Software e IA Responsável, dividido nas seguintes camadas:
 
-* **Frontend:** Desenvolvimento de uma interface web responsiva e intuitiva utilizando Vue.js.
+* **Frontend:** Desenvolvimento de uma interface web responsiva e intuitiva utilizando Streamlit.
 
 
-* **Backend:** Construção de uma API RESTful em Python (FastAPI/Flask) para orquestrar a lógica de negócios e o roteamento dos dados.
+* **Backend:** Construção de uma API RESTful em Python (FastAPI) para orquestrar a lógica de negócios e o roteamento dos dados.
 
 
 * **Componente de IA:** Integração com LLMs de código aberto (família Llama) através da API do GroqCloud (garantindo alta velocidade de inferência e custo zero de infraestrutura). A IA será potencializada com RAG (engastando os dados estatísticos limpos e manuais de infração).
