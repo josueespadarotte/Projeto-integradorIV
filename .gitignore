@@ -6,3 +6,7 @@ venv
 # Python
 __pycache__/
 *.py[cod]
+
+data/rag_cache/
+data/chunks.json
+*.faiss

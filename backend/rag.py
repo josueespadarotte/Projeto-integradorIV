@@ -1,14 +1,13 @@
 
 from __future__ import annotations
-
+import re
+import random
 import json
 import logging
 import os
 from pathlib import Path
 from typing import Any
-
 import faiss
-import numpy as np
 import pandas as pd
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
@@ -36,8 +35,9 @@ _pipeline: dict[str, Any] | None = None
 # ---------------------------------------------------------------------------
 # 1. Carregamento dos documentos
 # ---------------------------------------------------------------------------
+import re # Adicione no topo do arquivo, junto com os outros imports
+
 def _load_accidents(csv_path: Path) -> list[dict[str, str]]:
-    """Converte cada linha do CSV em uma frase com metadados de fonte."""
     if not csv_path.exists():
         logger.warning("CSV de acidentes não encontrado em %s", csv_path)
         return []
@@ -47,19 +47,27 @@ def _load_accidents(csv_path: Path) -> list[dict[str, str]]:
 
     documents: list[dict[str, str]] = []
     for idx, row in df.iterrows():
+        # Extrai o ano com regex (acha qualquer número de 4 dígitos, ex: 2023)
+        match_ano = re.search(r'\d{4}', str(row['data_inversa']))
+        ano_str = match_ano.group(0) if match_ano else "desconhecido"
+
         text = (
             f"Acidente em {row['data_inversa']}, na rodovia BR-{row['br']}, "
             f"km {row['km']}, município de {row['municipio']}. "
             f"Tipo: {row['tipo_acidente']}. "
             f"Classificação: {row['classificacao_acidente']}. "
             f"Causa: {row['causa_acidente']}. "
-            f"Mortos: {row['mortos']}, feridos leves: {row['feridos_leves']}, "
+            f"Mortos (vítimas fatais): {row['mortos']}, feridos leves: {row['feridos_leves']}, "
             f"feridos graves: {row['feridos_graves']}."
         )
+        
         documents.append(
             {
                 "texto": text,
                 "fonte": f"prf_es_clean.csv#linha_{idx + 1}",
+                "municipio": str(row['municipio']).strip().lower(),
+                "ano": ano_str, # Agora o ano é extraído corretamente
+                "br": str(row['br']).strip()
             }
         )
     return documents
@@ -206,24 +214,54 @@ def _get_pipeline() -> dict[str, Any]:
 # 5. Busca dos trechos mais relevantes
 # ---------------------------------------------------------------------------
 def search_chunks(question: str, top_k: int = TOP_K) -> list[dict[str, str]]:
-    """Retorna os top_k chunks mais similares à pergunta."""
+    import random
+    import re
+    
     pipeline = _get_pipeline()
     model: SentenceTransformer = pipeline["model"]
     chunks: list[dict[str, str]] = pipeline["chunks"]
     index: faiss.Index = pipeline["index"]
 
-    question_embedding = model.encode(
-        [question],
-        normalize_embeddings=True,
-    ).astype("float32")
+    query_lower = question.lower()
+    
+    municipios_na_pergunta = list(set(
+        c["municipio"] for c in chunks 
+        if c.get("municipio") and c["municipio"] in query_lower
+    ))
+    
+    match_br = re.search(r'br[- ]?(\d+)', query_lower)
+    brs_na_pergunta = [match_br.group(1)] if match_br else []
+    anos_na_pergunta = [ano for ano in ["2022", "2023", "2024", "2025", "2026"] if ano in query_lower]
 
+    logger.info("Filtros detectados -> Municípios: %s | BRs: %s | Anos: %s", municipios_na_pergunta, brs_na_pergunta, anos_na_pergunta)
+
+    # Se a pergunta tem filtros específicos
+    if municipios_na_pergunta or brs_na_pergunta or anos_na_pergunta:
+        chunks_filtrados = [
+            c for c in chunks
+            if (not municipios_na_pergunta or c.get("municipio") in municipios_na_pergunta) and
+               (not brs_na_pergunta or c.get("br") in brs_na_pergunta) and
+               (not anos_na_pergunta or c.get("ano") in anos_na_pergunta)
+        ]
+        logger.info("Total de chunks após o filtro: %d", len(chunks_filtrados))
+        
+        if len(chunks_filtrados) > 0:
+            return random.sample(chunks_filtrados, min(top_k, len(chunks_filtrados)))
+        else:
+            # Se filtrou e não achou NADA, retorna vazio para a IA dizer que não sabe,
+            # em vez de cair no FAISS e pegar dados de anos errados.
+            logger.warning("Filtro não encontrou nenhum dado. Retornando vazio.")
+            return []
+    
+    # Fallback normal só se não houver NENHUM filtro na pergunta
+    question_embedding = model.encode([question], normalize_embeddings=True).astype("float32")
     distances, indices = index.search(question_embedding, top_k)
+    
     results: list[dict[str, str]] = []
     for idx in indices[0]:
         if idx != -1:
             results.append(chunks[int(idx)])
     return results
-
 
 # ---------------------------------------------------------------------------
 # 6. Função pública usada pelo main.py

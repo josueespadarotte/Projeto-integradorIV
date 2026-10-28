@@ -5,6 +5,7 @@ import joblib
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from pathlib import Path
+import requests
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_PATH = BASE_DIR / "data" / "prf_es_clean.csv"
@@ -241,10 +242,11 @@ with kpi4:
 st.write("") 
 
 # ========================= ABAS =========================
-aba_mapa, aba_estatisticas, aba_ia = st.tabs([
+aba_mapa, aba_estatisticas, aba_ia , aba_chat  = st.tabs([
     "📍 Mapa de Calor", 
     "📊 Análise Estatística", 
-    "🤖 Predição de Risco"
+    "🤖 Predição de Risco",
+    "💬 Assistente Virtual (RAG)"
 ])
 
 with aba_mapa:
@@ -370,5 +372,62 @@ with aba_ia:
 
 with st.expander("🔍 Visualizar Base de Dados Filtrada"):
     st.dataframe(df_f, use_container_width=True)
+    
+    # ========================= ABA: ASSISTENTE VIRTUAL (IA) =========================
+with aba_chat:
+    st.subheader("💬 Assistente de Inteligência Viária")
+    st.markdown("Faça perguntas sobre os dados de acidentes e normas de trânsito baseados na base da PRF-ES.")
+    
+    # Inicializa o histórico de mensagens na sessão
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Exibe o histórico de mensagens
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            if "fontes" in message and message["fontes"]:
+                with st.expander("📚 Fontes consultadas"):
+                    for fonte in message["fontes"]:
+                        st.write(f"- {fonte}")
+
+    # Campo de entrada do usuário
+    if prompt := st.chat_input("Ex: Quantos acidentes com mortos ocorreram na BR-101?"):
+        # Adiciona a pergunta ao histórico
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Chamada HTTP para o backend FastAPI
+        with st.chat_message("assistant"):
+            with st.spinner("Consultando a base de dados e gerando resposta..."):
+                try:
+                    # Certifique-se de que o backend está rodando na porta 8000
+                    response = requests.post(
+                        "http://localhost:8000/chat", 
+                        json={"pergunta": prompt},
+                        timeout=30 # Evita que a tela trave se o backend demorar
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    resposta_ia = data.get("resposta", "Não consegui gerar uma resposta.")
+                    fontes = data.get("fontes", [])
+
+                    st.markdown(resposta_ia)
+                    
+                    if fontes:
+                        with st.expander("📚 Fontes consultadas"):
+                            for fonte in fontes:
+                                st.write(f"- {fonte}")
+
+                    # Salva a resposta da IA no histórico
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": resposta_ia, "fontes": fontes}
+                    )
+                except requests.exceptions.ConnectionError:
+                    st.error("⚠️ Erro de conexão: O backend (FastAPI) não está rodando. Inicie com: `uvicorn backend.main:app --reload`")
+                except Exception as e:
+                    st.error(f"Ocorreu um erro ao processar a pergunta: {e}")
 
 st.markdown("<div style='text-align: center; opacity: 0.6; margin-top: 2rem; font-size: 0.8rem;'>Dashboard v3.0 - Projeto Integrador III | Dados Abertos PRF</div>", unsafe_allow_html=True)

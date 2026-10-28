@@ -1,10 +1,8 @@
 
 from __future__ import annotations
-
 import logging
 import os
 from typing import List
-
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
