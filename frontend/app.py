@@ -407,18 +407,17 @@ with aba_chat:
         with st.chat_message("assistant"):
             with st.spinner("Consultando a base de dados e gerando resposta..."):
                 try:
-                    # Certifique-se de que o backend está rodando na porta 8000
                     response = requests.post(
-                        "http://localhost:8000/chat", 
-                        json={"pergunta": prompt}, 
-                        timeout=120 
+                        "http://localhost:8000/chat",
+                        json={"question": prompt},   # campo correto esperado pelo backend
+                        timeout=120,
                     )
                     response.raise_for_status()
                     data = response.json()
-                    
-                    # Lendo resposta e fontes em português
-                    resposta_ia = data.get("resposta", "Não consegui gerar uma resposta.")
-                    fontes = data.get("fontes", [])
+
+                    # O backend retorna "answer" e "sources"
+                    resposta_ia = data.get("answer", "Não consegui gerar uma resposta.")
+                    fontes = data.get("sources", [])
 
                     st.markdown(resposta_ia)
                     
