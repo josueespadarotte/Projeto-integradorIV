@@ -7,6 +7,7 @@ from plotly.subplots import make_subplots
 from pathlib import Path
 import os
 import requests
+from datetime import datetime
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_PATH = BASE_DIR / "data" / "prf_es_clean.csv"
@@ -47,22 +48,18 @@ st.markdown(
     }
 
     /* ----- BARRA LATERAL (Sem bugar os selects) ----- */
-    /* Letras brancas (como já estava funcionando) */
     [data-testid="stSidebar"] details:not([open]) summary p {
         color: #FFFFFF !important;
     }
-    /* Força as setinhas a ficarem brancas (cobre fill, stroke e color) */
     [data-testid="stSidebar"] details:not([open]) summary svg,
     [data-testid="stSidebar"] details:not([open]) summary svg path {
         color: #FFFFFF !important;
         fill: #FFFFFF !important;
         stroke: #FFFFFF !important;
     }
-    /* Força a borda do expander fechado a ficar branca (com leve transparência para ficar elegante) */
     [data-testid="stSidebar"] [data-testid="stExpander"] details:not([open]) {
         border-color: rgba(255, 255, 255, 0.5) !important;
     }
-    /* Garante que as letras e setinhas continuem brancas ao passar o mouse */
     [data-testid="stSidebar"] details summary:hover p,
     [data-testid="stSidebar"] details summary:hover svg,
     [data-testid="stSidebar"] details summary:hover svg path {
@@ -70,15 +67,12 @@ st.markdown(
         fill: #FFFFFF !important;
         stroke: #FFFFFF !important;
     }
-
-    /* Suaviza o fundo que aparece ao passar o mouse no título do filtro */
     [data-testid="stSidebar"] details summary:hover {
         background-color: rgba(255, 255, 255, 0.05) !important;
     }
     [data-testid="stSidebar"] {
         background: linear-gradient(135deg, #0A2647 0%, #1B3A5C 100%) !important;
     }
-    /* Pinta apenas os textos soltos e labels, protegendo o dropdown interno */
     [data-testid="stSidebar"] h1, 
     [data-testid="stSidebar"] h2, 
     [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
@@ -87,7 +81,7 @@ st.markdown(
         font-weight: 600 !important;
     }
 
-    /* ----- CARDS DE MÉTRICA (Glow tech seguro) ----- */
+    /* ----- CARDS DE MÉTRICA ----- */
     div[data-testid="stMetric"] {
         background: var(--glass-bg) !important;
         border-radius: 12px !important;
@@ -374,66 +368,369 @@ with aba_ia:
 with st.expander("🔍 Visualizar Base de Dados Filtrada"):
     st.dataframe(df_f, use_container_width=True)
     
-  # ========================= ABA: ASSISTENTE VIRTUAL (IA) =========================
+# ========================= ABA: ASSISTENTE VIRTUAL (IA) =========================
+
+st.markdown(
+    """
+    <style>
+    /* ===== Banner (igual ao atual) ===== */
+    .chat-hero {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 18px 22px;
+        border-radius: 14px;
+        background: #0F2D52;
+        border-bottom: 3px solid #F39C12;
+        color: #fff;
+        box-shadow: 0 4px 14px rgba(15, 45, 82, 0.18);
+        margin-bottom: 14px;
+    }
+    .chat-hero .icone {
+        font-size: 1.8rem;
+        background: rgba(255,255,255,0.10);
+        border: 1px solid rgba(255,255,255,0.18);
+        border-radius: 12px;
+        width: 54px; height: 54px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .chat-hero h3 { margin: 0; color: #fff; font-size: 1.25rem; font-weight: 700; }
+    .chat-hero p  { margin: 2px 0 0 0; color: #fff; opacity: 0.8; font-size: 0.85rem; }
+    .chat-status {
+        margin-left: auto;
+        font-size: 0.75rem;
+        color: #fff;
+        background: rgba(255,255,255,0.10);
+        border: 1px solid rgba(255,255,255,0.18);
+        padding: 4px 12px;
+        border-radius: 20px;
+        white-space: nowrap;
+    }
+    .chat-status::before {
+        content: "";
+        display: inline-block;
+        width: 8px; height: 8px;
+        background: #2ECC71;
+        border-radius: 50%;
+        margin-right: 6px;
+        box-shadow: 0 0 6px #2ECC71;
+    }
+
+    /* ===== Sugestões (igual ao atual) ===== */
+    .sugestoes-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        opacity: 0.7;
+        margin: 6px 0 4px 2px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    div[class*="st-key-sug_"] button {
+        background: transparent !important;
+        color: var(--text-color) !important;
+        border: 1.5px solid #2C74B3 !important;
+        border-radius: 30px !important;
+        font-weight: 500 !important;
+        box-shadow: none !important;
+        transition: background 0.2s ease, color 0.2s ease;
+    }
+    div[class*="st-key-sug_"] button:hover {
+        background: #2C74B3 !important;
+        color: #fff !important;
+        box-shadow: none !important;
+    }
+
+    /* ===== Barra de entrada (igual ao atual) ===== */
+    div[data-testid="stForm"] {
+        border: 1px solid rgba(128, 128, 128, 0.25) !important;
+        border-radius: 18px !important;
+        padding: 10px 14px !important;
+        background: var(--secondary-background-color);
+    }
+    div[data-testid="stForm"] input {
+        border-radius: 20px !important;
+        border: 2px solid #2C74B3 !important;
+        padding: 10px 16px !important;
+    }
+    div[data-testid="stForm"] input:focus {
+        box-shadow: 0 0 0 3px rgba(44, 116, 179, 0.25) !important;
+    }
+    div[data-testid="stFormSubmitButton"] button {
+        background: #2C74B3 !important;
+        color: #fff !important;
+        border: none !important;
+        border-radius: 30px !important;
+        font-weight: 600 !important;
+        width: 100%;
+        transition: background 0.2s ease;
+    }
+    div[data-testid="stFormSubmitButton"] button:hover {
+        background: #0F2D52 !important;
+        box-shadow: none !important;
+    }
+
+    /* ===== Botão Limpar (igual ao atual) ===== */
+    div.st-key-limpar_chat button {
+        background: transparent !important;
+        color: var(--text-color) !important;
+        border: 1px solid rgba(128, 128, 128, 0.45) !important;
+        border-radius: 30px !important;
+        min-height: 2.2rem;
+        padding: 0.2rem 0.8rem;
+        font-size: 0.85rem;
+        font-weight: 500 !important;
+        box-shadow: none !important;
+    }
+    div.st-key-limpar_chat button:hover {
+        border-color: #D62828 !important;
+        color: #D62828 !important;
+        box-shadow: none !important;
+    }
+
+    /* =====================================================
+       NOVO: CONVERSA NO ESTILO DE APP DE MENSAGENS
+       ===================================================== */
+
+    /* Marcadores invisíveis (identificam o autor da mensagem) */
+    [data-testid="stElementContainer"]:has(.msg-marker),
+    [data-testid="element-container"]:has(.msg-marker) {
+        display: none !important;
+    }
+
+    /* Balão base */
+    [data-testid="stChatMessage"] {
+        gap: 0.75rem !important;
+        padding: 0.75rem 1rem !important;
+        margin-bottom: 0.7rem !important;
+        border-radius: 18px !important;
+        width: fit-content;
+        max-width: 80%;
+        box-shadow: none !important;
+    }
+    [data-testid="stChatMessage"] p { margin-bottom: 0.3rem; line-height: 1.5; }
+    [data-testid="stChatMessage"] [data-testid="stCaptionContainer"] {
+        margin-top: -4px;
+        font-size: 0.7rem;
+        opacity: 0.7;
+    }
+
+    /* Assistente: esquerda, neutro */
+    [data-testid="stChatMessage"]:has(.msg-ia) {
+        background: var(--secondary-background-color) !important;
+        border: 1px solid rgba(128, 128, 128, 0.20) !important;
+        border-bottom-left-radius: 4px !important;
+        min-width: 280px;
+        max-width: 88%;
+    }
+
+    /* Usuário: direita, azul sólido */
+    [data-testid="stChatMessage"]:has(.msg-user) {
+        flex-direction: row-reverse !important;
+        margin-left: auto !important;
+        background: #2C74B3 !important;
+        border: 1px solid #2C74B3 !important;
+        border-bottom-right-radius: 4px !important;
+    }
+    [data-testid="stChatMessage"]:has(.msg-user) p,
+    [data-testid="stChatMessage"]:has(.msg-user) [data-testid="stCaptionContainer"],
+    [data-testid="stChatMessage"]:has(.msg-user) [data-testid="stCaptionContainer"] * {
+        color: #fff !important;
+    }
+    [data-testid="stChatMessage"]:has(.msg-user) [data-testid="stCaptionContainer"] {
+        text-align: right;
+    }
+
+    /* Avatares redondos */
+    [data-testid^="stChatMessageAvatar"] {
+        width: 2rem !important;
+        height: 2rem !important;
+        border-radius: 50% !important;
+        background: #0F2D52 !important;
+        color: #fff !important;
+        align-self: flex-start;
+    }
+    [data-testid="stChatMessage"]:has(.msg-user) [data-testid^="stChatMessageAvatar"] {
+        background: rgba(255, 255, 255, 0.22) !important;
+    }
+
+    /* Indicador "digitando..." */
+    .digitando { display: flex; gap: 5px; padding: 8px 2px; }
+    .digitando span {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: #2C74B3;
+        opacity: 0.35;
+        animation: pulso 1.2s infinite ease-in-out;
+    }
+    .digitando span:nth-child(2) { animation-delay: 0.2s; }
+    .digitando span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes pulso {
+        0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
+        40%           { opacity: 1;    transform: scale(1.1); }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+AVATAR_IA = ":material/support_agent:"
+AVATAR_USER = ":material/person:"
+
+SUGESTOES = [
+    "Quantos acidentes fatais ocorreram na BR-101?",
+    "Quais são as principais causas de acidentes?",
+    "Qual o horário mais perigoso nas rodovias?",
+]
+
+
+def agora() -> str:
+    return datetime.now().strftime("%H:%M")
+
+
+def nova_boas_vindas() -> dict:
+    return {
+        "role": "assistant",
+        "content": (
+            "Olá! Sou o assistente virtual da PRF-ES. 👋\n\n"
+            "Posso responder sobre **acidentes em rodovias**, **causas**, "
+            "**pontos críticos** e **normas de trânsito**. Como posso ajudar?"
+        ),
+        "fontes": [],
+        "hora": agora(),
+    }
+
+
+def registrar_pergunta(pergunta: str):
+    """Adiciona a pergunta ao histórico e marca que há uma resposta pendente."""
+    st.session_state.messages.append(
+        {"role": "user", "content": pergunta, "fontes": [], "hora": agora()}
+    )
+    st.session_state.pendente = True
+
+
+def responder_pendente():
+    """Consulta o backend para a última pergunta e salva a resposta (ou o erro)."""
+    pergunta = st.session_state.messages[-1]["content"]
+    try:
+        resp = requests.post(
+            "http://localhost:8000/chat",
+            json={"question": pergunta},
+            timeout=120,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        conteudo = data.get("answer", "Não consegui gerar uma resposta.")
+        fontes = data.get("sources", [])
+    except requests.exceptions.ConnectionError:
+        conteudo = (
+            "⚠️ **Backend offline.** Inicie com:\n\n"
+            "`python -m uvicorn backend.main:app --reload --port 8000`"
+        )
+        fontes = []
+    except Exception as e:
+        conteudo = f"❌ Ocorreu um erro ao processar a pergunta: `{e}`"
+        fontes = []
+
+    st.session_state.messages.append(
+        {"role": "assistant", "content": conteudo, "fontes": fontes, "hora": agora()}
+    )
+    st.session_state.pendente = False
+
+
+def renderizar_mensagem(msg: dict):
+    eh_user = msg["role"] == "user"
+    marcador = "msg-user" if eh_user else "msg-ia"
+    with st.chat_message(msg["role"], avatar=AVATAR_USER if eh_user else AVATAR_IA):
+        st.markdown(f"<span class='msg-marker {marcador}'></span>", unsafe_allow_html=True)
+        st.markdown(msg["content"])
+        if msg.get("hora"):
+            st.caption(msg["hora"])
+        if msg.get("fontes"):
+            with st.expander(f"📚 Fontes consultadas ({len(msg['fontes'])})"):
+                for fonte in msg["fontes"]:
+                    st.write(f"- {fonte}")
+
+
+if "messages" not in st.session_state:
+    st.session_state.messages = [nova_boas_vindas()]
+if "pendente" not in st.session_state:
+    st.session_state.pendente = False
+
+
 with aba_chat:
-    st.subheader("💬 Assistente de Inteligência Viária")
-    st.markdown("Faça perguntas sobre os dados de acidentes e normas de trânsito baseados na base da PRF-ES.")
-    
-    # Inicializa o histórico de mensagens na sessão
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    # ----- Banner (igual ao atual) -----
+    st.markdown(
+        """
+        <div class="chat-hero">
+            <div class="icone">🤖</div>
+            <div>
+                <h3>Assistente de Inteligência Viária</h3>
+                <p>Consulte os dados de acidentes e normas de trânsito da base PRF-ES.</p>
+            </div>
+            <div class="chat-status">On-line</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    # Exibe o histórico de mensagens anteriores
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-            if "fontes" in message and message["fontes"]:
-                with st.expander("📚 Fontes consultadas"):
-                    for fonte in message["fontes"]:
-                        st.write(f"- {fonte}")
+    # ----- Sugestões (só no início da conversa) -----
+    if len(st.session_state.messages) <= 1 and not st.session_state.pendente:
+        st.markdown("<div class='sugestoes-label'>💡 Sugestões de perguntas</div>", unsafe_allow_html=True)
+        cols_sug = st.columns(len(SUGESTOES))
+        for i, sugestao in enumerate(SUGESTOES):
+            if cols_sug[i].button(sugestao, key=f"sug_{i}", use_container_width=True):
+                registrar_pergunta(sugestao)
+                st.rerun()
 
-    # Campo de entrada e botão de envio (substituindo o chat_input)
+    # ----- Área de mensagens (altura dinâmica + scroll) -----
+    n_itens = len(st.session_state.messages) + (1 if st.session_state.pendente else 0)
+    altura_chat = min(520, max(130, n_itens * 105))
+    area_chat = st.container(height=altura_chat, border=False)
+    with area_chat:
+        for msg in st.session_state.messages:
+            renderizar_mensagem(msg)
+
+        if st.session_state.pendente:
+            with st.chat_message("assistant", avatar=AVATAR_IA):
+                st.markdown("<span class='msg-marker msg-ia'></span>", unsafe_allow_html=True)
+                st.markdown(
+                    "<div class='digitando'><span></span><span></span><span></span></div>",
+                    unsafe_allow_html=True,
+                )
+
+    # ----- Barra de entrada (igual ao atual) -----
     with st.form(key="chat_form", clear_on_submit=True):
-        prompt = st.text_input("Digite sua pergunta:", placeholder="Ex: Quantos acidentes com mortos ocorreram na BR-101?")
-        submit_button = st.form_submit_button(label="Enviar Pergunta")
+        col_input, col_enviar = st.columns([6, 1])
+        with col_input:
+            prompt = st.text_input(
+                "Digite sua pergunta",
+                placeholder="Ex: Quantos acidentes com vítimas fatais ocorreram na BR-101?",
+                label_visibility="collapsed",
+            )
+        with col_enviar:
+            submit_button = st.form_submit_button("Enviar ➤")
 
-    if submit_button and prompt:
-        # Adiciona a pergunta ao histórico e exibe
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+    # ----- Rodapé (igual ao atual) -----
+    col_info, col_limpar = st.columns([5, 1], vertical_alignment="center")
+    with col_info:
+        st.caption("As respostas são geradas por IA com base nos dados da PRF-ES. Confira as fontes sempre que possível.")
+    with col_limpar:
+        if st.button("Limpar", key="limpar_chat", use_container_width=True):
+            st.session_state.messages = [nova_boas_vindas()]
+            st.session_state.pendente = False
+            st.rerun()
 
-        # Chamada HTTP para o backend FastAPI
-        with st.chat_message("assistant"):
-            with st.spinner("Consultando a base de dados e gerando resposta..."):
-                try:
-                    response = requests.post(
-                        "http://localhost:8000/chat",
-                        json={"question": prompt},   # campo correto esperado pelo backend
-                        timeout=120,
-                    )
-                    response.raise_for_status()
-                    data = response.json()
+    # ----- Envio -----
+    if submit_button:
+        if not prompt or not prompt.strip():
+            st.toast("Digite uma pergunta para continuar.", icon="⚠️")
+        elif not st.session_state.pendente:
+            registrar_pergunta(prompt.strip())
+            st.rerun()
 
-                    # O backend retorna "answer" e "sources"
-                    resposta_ia = data.get("answer", "Não consegui gerar uma resposta.")
-                    fontes = data.get("sources", [])
-
-                    st.markdown(resposta_ia)
-                    
-                    if fontes:
-                        with st.expander("📚 Fontes consultadas"):
-                            for fonte in fontes:
-                                st.write(f"- {fonte}")
-
-                    # Salva a resposta da IA no histórico
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": resposta_ia, "fontes": fontes}
-                    )
-                except requests.exceptions.ConnectionError:
-                    st.error("⚠️ Erro de conexão: O backend (FastAPI) não está rodando. Inicie com: `python -m uvicorn backend.main:app --reload --port 8000`")
-                except Exception as e:
-                    st.error(f"Ocorreu um erro ao processar a pergunta: {e}")
-
+    # ----- Resposta pendente (roda depois de a tela já estar desenhada) -----
+    if st.session_state.pendente:
+        responder_pendente()
+        st.rerun()
 
 st.markdown("<div style='text-align: center; opacity: 0.6; margin-top: 2rem; font-size: 0.8rem;'>Dashboard v3.0 - Projeto Integrador III | Dados Abertos PRF</div>", unsafe_allow_html=True)
