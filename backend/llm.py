@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import Any
 
 from dotenv import load_dotenv
-from groq import Groq
+from groq import Groq, RateLimitError
 
 logger = logging.getLogger("backend.llm")
 
@@ -17,12 +18,13 @@ load_dotenv()
 # Configuração
 # ---------------------------------------------------------------------------
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-DEFAULT_MODEL = "llama-3.3-70b-versatile"  # modelo atual e recomendado
-DEFAULT_TEMPERATURE = 0.1                  # baixa temperatura para respostas factuais
-DEFAULT_MAX_TOKENS = 1024
 
-# Cliente inicializado sob demanda para não falhar no import caso a chave
-# ainda não esteja configurada em algum ambiente de teste.
+# ATUALIZADO: O modelo llama-3.3-70b-versatile foi descontinuado.
+# Usando o modelo atual recomendado pela Groq (verifique no console).
+DEFAULT_MODEL = "openai/gpt-oss-120b"
+DEFAULT_TEMPERATURE = 0.1
+DEFAULT_MAX_TOKENS = 2048 # Aumentado para o novo modelo
+
 _client: Groq | None = None
 
 
@@ -51,52 +53,69 @@ def generate_response(
     model: str = DEFAULT_MODEL,
     temperature: float = DEFAULT_TEMPERATURE,
     max_tokens: int = DEFAULT_MAX_TOKENS,
+    max_retries: int = 3,
 ) -> str:
     """
     Envia o prompt para o modelo do Groq e retorna o texto da resposta.
-
-    O prompt já vem montado pelo rag.py com o contexto e as fontes,
-    então esta função apenas faz a chamada à API e extrai o conteúdo.
+    Implementa retry (espera) em caso de rate limit.
     """
     if not prompt or not prompt.strip():
         return ""
 
     client = _get_client()
 
-    try:
-        completion = client.chat.completions.create(
-            model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Você é um assistente especializado em segurança "
-                        "rodoviária e normas de trânsito brasileiras. "
-                        "Responda sempre em português do Brasil, de forma "
-                        "clara e objetiva, citando as fontes fornecidas."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-    except Exception:
-        logger.exception("Falha ao chamar a API do Groq.")
-        raise
+    for attempt in range(max_retries):
+        try:
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Você é um assistente especializado em segurança "
+                            "rodoviária e normas de trânsito brasileiras. "
+                            "Responda sempre em português do Brasil, de forma "
+                            "clara e objetiva, citando as fontes fornecidas."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            
+            # Monitoramento de Tokens (IA Responsável)
+            usage = completion.usage
+            if usage:
+                logger.info(
+                    "Uso de tokens -> Prompt: %d | Resposta: %d | Total: %d",
+                    usage.prompt_tokens,
+                    usage.completion_tokens,
+                    usage.total_tokens
+                )
 
-    response_text = completion.choices[0].message.content or ""
-    logger.info(
-        "Resposta gerada pelo modelo %s (%d caracteres).",
-        model,
-        len(response_text),
-    )
-    return response_text.strip()
+            response_text = completion.choices[0].message.content or ""
+            return response_text.strip()
 
+        except RateLimitError as e:
+            # Tratamento de Rate Limit
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 2  # Espera 2s, depois 4s...
+                logger.warning(
+                    "Rate limit atingido no Groq. Tentando novamente em %d segundos...",
+                    wait_time
+                )
+                time.sleep(wait_time)
+            else:
+                logger.error("Falha após %d tentativas devido a rate limit.", max_retries)
+                raise RuntimeError("Muitas requisições à API. Tente novamente mais tarde.") from e
 
-# ---------------------------------------------------------------------------
-# Teste manual: python -m backend.llm
-# ---------------------------------------------------------------------------
+        except Exception:
+            logger.exception("Falha ao chamar a API do Groq.")
+            raise
+
+    return ""
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
