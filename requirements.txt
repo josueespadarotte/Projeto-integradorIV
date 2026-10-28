@@ -11,3 +11,7 @@ uvicorn[standard]
 python-dotenv
 pydantic
 httpx
+sentence-transformers
+faiss-cpu
+langchain-text-splitters
+groq
