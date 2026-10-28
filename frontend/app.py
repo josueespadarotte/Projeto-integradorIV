@@ -1,11 +1,14 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 import plotly.express as px
 import joblib
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_PATH = BASE_DIR / "data" / "prf_es_clean.csv"
+MODELS_DIR = BASE_DIR / "models"
 
 # ========================= CONFIGURAÇÃO DA PÁGINA =========================
 st.set_page_config(
@@ -176,7 +179,7 @@ st.markdown(
 # ========================= CARREGAMENTO DE DADOS =========================
 @st.cache_data
 def load_data():
-    df = pd.read_csv('app/prf_es_clean.csv')
+    df = pd.read_csv(DATA_PATH)
     df['hora_inteira'] = pd.to_datetime(df['horario'], format='%H:%M:%S', errors='coerce').dt.hour
     for col in ['latitude', 'longitude']:
         df[col] = df[col].astype(str).str.replace(',', '.')
@@ -298,8 +301,8 @@ with aba_estatisticas:
 with aba_ia:
     st.subheader("🧠 Entendendo as Decisões do Modelo")
     try:
-        modelo_ia = joblib.load('models/modelo_risco_acidente.pkl')
-        colunas_ia = joblib.load('models/colunas_treino.pkl')
+        modelo_ia = joblib.load(MODELS_DIR / 'modelo_risco_acidente.pkl')
+        colunas_ia = joblib.load(MODELS_DIR / 'colunas_treino.pkl')
 
         importancias = modelo_ia.feature_importances_
         df_importancia = pd.DataFrame({
@@ -334,8 +337,8 @@ with aba_ia:
 
     if st.button("Executar Diagnóstico de Risco"):
         try:
-            modelo = joblib.load('models/modelo_risco_acidente.pkl')
-            colunas_treino = joblib.load('models/colunas_treino.pkl')
+            modelo = joblib.load(MODELS_DIR / 'modelo_risco_acidente.pkl')
+            colunas_treino = joblib.load(MODELS_DIR / 'colunas_treino.pkl') 
             entrada = pd.DataFrame(columns=colunas_treino)
             entrada.loc[0] = 0
             
