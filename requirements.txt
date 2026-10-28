@@ -15,3 +15,5 @@ sentence-transformers
 faiss-cpu
 langchain-text-splitters
 groq
+requests
+pytest

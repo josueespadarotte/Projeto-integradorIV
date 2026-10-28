@@ -5,6 +5,7 @@ import joblib
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from pathlib import Path
+import os
 import requests
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -373,7 +374,7 @@ with aba_ia:
 with st.expander("🔍 Visualizar Base de Dados Filtrada"):
     st.dataframe(df_f, use_container_width=True)
     
-    # ========================= ABA: ASSISTENTE VIRTUAL (IA) =========================
+  # ========================= ABA: ASSISTENTE VIRTUAL (IA) =========================
 with aba_chat:
     st.subheader("💬 Assistente de Inteligência Viária")
     st.markdown("Faça perguntas sobre os dados de acidentes e normas de trânsito baseados na base da PRF-ES.")
@@ -382,7 +383,7 @@ with aba_chat:
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Exibe o histórico de mensagens
+    # Exibe o histórico de mensagens anteriores
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -391,9 +392,13 @@ with aba_chat:
                     for fonte in message["fontes"]:
                         st.write(f"- {fonte}")
 
-    # Campo de entrada do usuário
-    if prompt := st.chat_input("Ex: Quantos acidentes com mortos ocorreram na BR-101?"):
-        # Adiciona a pergunta ao histórico
+    # Campo de entrada e botão de envio (substituindo o chat_input)
+    with st.form(key="chat_form", clear_on_submit=True):
+        prompt = st.text_input("Digite sua pergunta:", placeholder="Ex: Quantos acidentes com mortos ocorreram na BR-101?")
+        submit_button = st.form_submit_button(label="Enviar Pergunta")
+
+    if submit_button and prompt:
+        # Adiciona a pergunta ao histórico e exibe
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -405,12 +410,13 @@ with aba_chat:
                     # Certifique-se de que o backend está rodando na porta 8000
                     response = requests.post(
                         "http://localhost:8000/chat", 
-                        json={"pergunta": prompt},
-                        timeout=30 # Evita que a tela trave se o backend demorar
+                        json={"pergunta": prompt}, 
+                        timeout=120 
                     )
                     response.raise_for_status()
                     data = response.json()
                     
+                    # Lendo resposta e fontes em português
                     resposta_ia = data.get("resposta", "Não consegui gerar uma resposta.")
                     fontes = data.get("fontes", [])
 
@@ -426,8 +432,9 @@ with aba_chat:
                         {"role": "assistant", "content": resposta_ia, "fontes": fontes}
                     )
                 except requests.exceptions.ConnectionError:
-                    st.error("⚠️ Erro de conexão: O backend (FastAPI) não está rodando. Inicie com: `uvicorn backend.main:app --reload`")
+                    st.error("⚠️ Erro de conexão: O backend (FastAPI) não está rodando. Inicie com: `python -m uvicorn backend.main:app --reload --port 8000`")
                 except Exception as e:
                     st.error(f"Ocorreu um erro ao processar a pergunta: {e}")
+
 
 st.markdown("<div style='text-align: center; opacity: 0.6; margin-top: 2rem; font-size: 0.8rem;'>Dashboard v3.0 - Projeto Integrador III | Dados Abertos PRF</div>", unsafe_allow_html=True)

@@ -1,29 +1,22 @@
-
 from __future__ import annotations
 
 import logging
 import os
 import time
 from typing import Any
-
+from groq import APIConnectionError, APIStatusError, AuthenticationError, Groq, RateLimitError
 from dotenv import load_dotenv
-from groq import Groq, RateLimitError
 
 logger = logging.getLogger("backend.llm")
 
 # Carrega as variáveis do arquivo .env (se existir).
 load_dotenv()
 
-# ---------------------------------------------------------------------------
 # Configuração
-# ---------------------------------------------------------------------------
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-# ATUALIZADO: O modelo llama-3.3-70b-versatile foi descontinuado.
-# Usando o modelo atual recomendado pela Groq (verifique no console).
-DEFAULT_MODEL = "openai/gpt-oss-120b"
+DEFAULT_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 DEFAULT_TEMPERATURE = 0.1
-DEFAULT_MAX_TOKENS = 2048 # Aumentado para o novo modelo
+DEFAULT_MAX_TOKENS = 2048
+REQUEST_TIMEOUT = 30.0
 
 _client: Groq | None = None
 
@@ -34,13 +27,14 @@ def _get_client() -> Groq:
     if _client is not None:
         return _client
 
-    if not GROQ_API_KEY:
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
         raise RuntimeError(
             "A variável de ambiente GROQ_API_KEY não foi encontrada. "
             "Adicione-a ao arquivo .env na raiz do projeto."
         )
 
-    _client = Groq(api_key=GROQ_API_KEY)
+    _client = Groq(api_key=api_key, timeout=REQUEST_TIMEOUT, max_retries=0)
     logger.info("Cliente Groq inicializado com sucesso.")
     return _client
 
@@ -110,9 +104,15 @@ def generate_response(
                 logger.error("Falha após %d tentativas devido a rate limit.", max_retries)
                 raise RuntimeError("Muitas requisições à API. Tente novamente mais tarde.") from e
 
-        except Exception:
+        except AuthenticationError as e:
+            raise RuntimeError("Chave da API Groq inválida ou sem permissão (GROQ_API_KEY).") from e
+
+        except APIConnectionError as e:  # inclui timeout
+            raise RuntimeError("Não foi possível conectar à API da Groq (conexão ou timeout).") from e
+
+        except Exception as e:
             logger.exception("Falha ao chamar a API do Groq.")
-            raise
+            raise RuntimeError("Falha ao consultar o modelo de linguagem.") from e
 
     return ""
 

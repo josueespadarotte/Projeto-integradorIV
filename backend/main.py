@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import logging
 import os
@@ -6,7 +5,7 @@ from typing import List
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 load_dotenv()
 
@@ -15,36 +14,9 @@ logger = logging.getLogger("backend")
 
 
 # ---------------------------------------------------------------------------
-# Integração com o componente de IA
+# Integração com o componente de IA (import direto: se falhar, o erro aparece)
 # ---------------------------------------------------------------------------
-def _load_responder():
-    """Carrega backend.rag.answer; cai no stub se ainda não existir."""
-    try:
-        from .rag import answer  # execução como pacote
-        return answer
-    except ImportError:
-        pass
-    try:
-        from backend.rag import answer  # uvicorn backend.main:app
-        return answer
-    except ImportError:
-        pass
-
-    logger.warning(
-        "backend.rag.answer não encontrado; usando STUB temporário. "
-        "Será substituído automaticamente quando o rag.py existir."
-    )
-
-    def stub(question: str) -> dict:
-        return {
-            "resposta": f"[STUB] Resposta simulada para: {question!r}",
-            "fontes": ["stub:backend.rag.answer"],
-        }
-
-    return stub
-
-
-responder = _load_responder()
+from backend.rag import answer as responder  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -54,9 +26,19 @@ class ChatRequest(BaseModel):
     question: str = Field(
         ...,
         min_length=1,
+        max_length=500,
         description="Pergunta em linguagem natural sobre acidentes rodoviários ou normas de trânsito.",
         examples=["Quantos acidentes fatais ocorreram no Espírito Santo em 2023?"],
     )
+
+
+    @field_validator("question")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("A pergunta não pode ser vazia.")
+        return v
 
 
 class ChatResponse(BaseModel):
@@ -121,12 +103,12 @@ def health() -> HealthResponse:
 def chat(payload: ChatRequest) -> ChatResponse:
     try:
         result = responder(payload.question)
-    except Exception as exc:
+    except RuntimeError as exc:
         logger.exception("Falha ao processar /chat")
-        raise HTTPException(
-            status_code=502,
-            detail=f"Erro no componente de IA: {exc}",
-        ) from exc
+        raise HTTPException(status_code=502, detail=f"Erro no componente de IA: {exc}") from exc
+    except Exception as exc:
+        logger.exception("Erro inesperado em /chat")
+        raise HTTPException(status_code=500, detail="Erro interno ao processar a pergunta.") from exc
 
     answer_text = str(result.get("resposta", "")).strip()
     sources = list(result.get("fontes") or [])
