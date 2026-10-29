@@ -834,6 +834,48 @@ with aba_chat:
         altura_chat = min(560, max(260, n_itens * 140))
         area_chat = st.container(height=altura_chat, border=False)
         with area_chat:
+            # Rolagem automática para a última mensagem.
+            # O comentário com número único força o navegador a rodar o script a cada execução.
+            components.html(
+                f"""
+                <!-- {time.time_ns()} -->
+                <script>
+                (function () {{
+                    const win = window.parent;
+                    const doc = win.document;
+                    let parar = false;
+
+                    function achaContainer() {{
+                        const msgs = doc.querySelectorAll('[data-testid="stChatMessage"]');
+                        if (!msgs.length) return null;
+                        let el = msgs[msgs.length - 1].parentElement;
+                        while (el && el !== doc.body) {{
+                            const oy = win.getComputedStyle(el).overflowY;
+                            if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) return el;
+                            el = el.parentElement;
+                        }}
+                        return null;
+                    }}
+
+                    function rolar() {{
+                        if (parar) return;
+                        const c = achaContainer();
+                        if (c) c.scrollTop = c.scrollHeight;
+                    }}
+
+                    // Se o usuário rolar manualmente, para de forçar a rolagem
+                    doc.addEventListener('wheel', function () {{ parar = true; }}, {{ once: true, passive: true }});
+                    doc.addEventListener('touchmove', function () {{ parar = true; }}, {{ once: true, passive: true }});
+
+                    const timer = setInterval(rolar, 150);
+                    setTimeout(function () {{ clearInterval(timer); }}, 8000);
+                    rolar();
+                }})();
+                </script>
+                """,
+                height=0,
+            )
+
             total = len(st.session_state.historico)
             for idx, msg in enumerate(st.session_state.historico):
                 renderizar_mensagem(idx, msg, ultimo=(idx == total - 1))
@@ -847,46 +889,132 @@ with aba_chat:
                         unsafe_allow_html=True,
                     )
 
-            # Rola até a última mensagem
-            components.html(
-                """
-                <script>
-                setTimeout(function () {
-                    try {
-                        const msgs = window.parent.document.querySelectorAll('[data-testid="stChatMessage"]');
-                        if (msgs.length) { msgs[msgs.length - 1].scrollIntoView({block: 'nearest'}); }
-                    } catch (e) {}
-                }, 150);
-                </script>
-                """,
-                height=0,
-            )
+    # ========================= BARRA DE ENTRADA FIXA (ESTILO PÍLULA) =========================
+    st.markdown("""
+    <style>
+    /* Largura da barra lateral: 21rem quando aberta, 0 quando recolhida ou no celular */
+    :root { --sb-w: 0px; }
+    @media (min-width: 992px) {
+        body:has([data-testid="stSidebar"][aria-expanded="true"]) { --sb-w: 21rem; }
+    }
 
-    # ----- Barra de entrada -----
-    with st.form(key="chat_form", clear_on_submit=True):
-        col_input, col_enviar = st.columns([8, 1.3], vertical_alignment="center")
-        with col_input:
-            prompt = st.text_input(
-                "Digite sua pergunta",
-                placeholder="Pergunte sobre acidentes, causas, rodovias ou normas de trânsito",
-                label_visibility="collapsed",
-            )
-        with col_enviar:
-            submit_button = st.form_submit_button("Enviar", icon=":material/send:")
+    /* Espaço no fim da página para a barra não cobrir o conteúdo */
+    .block-container { padding-bottom: 11rem !important; }
 
-    st.caption("As respostas são geradas por IA com base nos dados da PRF-ES. Confira as informações importantes.")
+    /* Bloco invisível do script de rolagem: não ocupa espaço */
+    div[data-testid="stElementContainer"]:has(iframe[height="0"]) {
+        position: absolute;
+        height: 0;
+        overflow: hidden;
+    }
 
-    # ----- Envio -----
-    if submit_button:
-        if not prompt or not prompt.strip():
-            st.toast("Digite uma pergunta para continuar.", icon=":material/warning:")
-        elif not st.session_state.pendente:
-            registrar_pergunta(prompt.strip())
-            st.rerun()
+    /* ----- Barra fixa, centralizada na área do chat ----- */
+    div[data-testid="stChatInput"] {
+        position: fixed !important;
+        bottom: 34px !important;
+        left: var(--sb-w) !important;
+        right: 0 !important;
+        width: min(860px, calc(100vw - var(--sb-w) - 2rem)) !important;
+        margin: 0 auto !important;
+        z-index: 9999 !important;
+        background: var(--background-color, #ffffff) !important;
+        border: 1px solid rgba(128, 128, 128, 0.35) !important;
+        border-radius: 28px !important;
+        padding: 4px 8px 4px 14px !important;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.10) !important;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    div[data-testid="stChatInput"]:focus-within {
+        border-color: #2C74B3 !important;
+        box-shadow: 0 0 0 3px rgba(44, 116, 179, 0.18), 0 6px 24px rgba(0, 0, 0, 0.10) !important;
+    }
+
+    /* ----- Remove fundos e bordas das camadas internas ----- */
+    div[data-testid="stChatInput"] > div,
+    div[data-testid="stChatInput"] > div > div,
+    div[data-testid="stChatInput"] [data-baseweb="base-input"],
+    div[data-testid="stChatInput"] [data-baseweb="textarea"],
+    div[data-testid="stChatInput"] textarea {
+        background: transparent !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+        color: var(--text-color) !important;
+        font-size: 1rem !important;
+    }
+    div[data-testid="stChatInput"] textarea {
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
+    }
+    div[data-testid="stChatInput"] textarea::placeholder {
+        color: var(--text-color) !important;
+        opacity: 0.5 !important;
+    }
+
+    /* ----- Botão de enviar: círculo azul com a seta nativa ----- */
+    div[data-testid="stChatInput"] button {
+        background: #2C74B3 !important;
+        border: none !important;
+        border-radius: 50% !important;
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        padding: 0 !important;
+        margin: 2px 0 !important;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s ease, transform 0.15s ease;
+    }
+    div[data-testid="stChatInput"] button:hover:not(:disabled) {
+        background: #0F2D52 !important;
+        transform: scale(1.05);
+    }
+    div[data-testid="stChatInput"] button svg,
+    div[data-testid="stChatInput"] button svg path {
+        color: #fff !important;
+        fill: #fff !important;
+    }
+    /* Campo vazio: botão apagado */
+    div[data-testid="stChatInput"] button:disabled {
+        background: rgba(128, 128, 128, 0.35) !important;
+        opacity: 1 !important;
+        cursor: not-allowed;
+    }
+
+    /* ----- Legenda abaixo da barra ----- */
+    .legenda-chat {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: var(--sb-w) !important;
+        right: 0 !important;
+        width: min(860px, calc(100vw - var(--sb-w) - 2rem));
+        margin: 0 auto;
+        text-align: center;
+        font-size: 0.72rem;
+        opacity: 0.65;
+        z-index: 9998;
+        padding: 6px 0 8px 0;
+        background: var(--background-color, #ffffff);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="legenda-chat">As respostas são geradas por IA com base nos dados da PRF-ES. '
+        'Confira as informações importantes.</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ----- Campo de entrada nativo -----
+    prompt = st.chat_input("Pergunte sobre acidentes, causas, rodovias ou normas de trânsito")
+    if prompt and prompt.strip() and not st.session_state.pendente:
+        registrar_pergunta(prompt.strip())
+        st.rerun()
 
     # ----- Resposta pendente (roda depois de a tela já estar desenhada) -----
     if st.session_state.pendente:
         responder_pendente()
         st.rerun()
 
-st.markdown("<div style='text-align: center; opacity: 0.6; margin-top: 2rem; font-size: 0.8rem;'>Dashboard v3.0 - Projeto Integrador III | Dados Abertos PRF</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; opacity: 0.6; margin-top: 2rem; margin-bottom: 8rem; font-size: 0.8rem;'>Dashboard v3.0 - Projeto Integrador III | Dados Abertos PRF</div>", unsafe_allow_html=True)
