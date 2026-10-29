@@ -2,6 +2,7 @@ from __future__ import annotations
 import logging
 import os
 from typing import List
+from contextlib import asynccontextmanager  # <-- ADICIONADO AQUI
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,9 +15,9 @@ logger = logging.getLogger("backend")
 
 
 # ---------------------------------------------------------------------------
-# Integração com o componente de IA (import direto: se falhar, o erro aparece)
+# Integração com o componente de IA
 # ---------------------------------------------------------------------------
-from backend.rag import answer as responder  # noqa: E402
+from backend.rag import answer as responder, _get_pipeline  # <-- ADICIONADO O _get_pipeline AQUI
 
 
 # ---------------------------------------------------------------------------
@@ -54,8 +55,16 @@ class HealthResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Aplicação
+# Aplicação e Carregamento Antecipado (Startup)
 # ---------------------------------------------------------------------------
+@asynccontextmanager  # <-- ADICIONADO AQUI
+async def lifespan(app: FastAPI):
+    logger.info("⏳ INICIANDO CARREGAMENTO DA IA. POR FAVOR, AGUARDE...")
+    _get_pipeline()  # Força o RAG a carregar tudo AGORA
+    logger.info("✅ MODELO CARREGADO! PRONTO PARA PERGUNTAS.")
+    yield
+
+
 app = FastAPI(
     title="Assistente de Acidentes Rodoviários",
     description=(
@@ -64,6 +73,7 @@ app = FastAPI(
         "de acidentes e normas de trânsito selecionados pelo grupo."
     ),
     version="0.1.0",
+    lifespan=lifespan  # <-- ADICIONADO AQUI
 )
 
 app.add_middleware(

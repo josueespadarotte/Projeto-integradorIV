@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import unicodedata
+import threading  # <-- ADICIONADO AQUI
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,7 @@ META_KEYS = ("municipio", "ano", "br")
 # Pipeline e tabela carregados sob demanda (evita custo no import do main.py).
 _pipeline: dict[str, Any] | None = None
 _df_cache: pd.DataFrame | None = None
+_lock = threading.Lock()  # <-- ADICIONADO AQUI
 
 COUNT_RE = re.compile(r"\b(quantos|quantas|quantidade|total|numero)\b")
 DOMAIN_RE = re.compile(
@@ -184,20 +186,25 @@ def _get_pipeline() -> dict[str, Any]:
     if _pipeline is not None:
         return _pipeline
 
-    model = _load_model()
-    cache = _load_index_from_cache()
-    if cache is not None:
-        chunks, index = cache
-    else:
-        chunks = chunk_documents(load_documents())
-        if not chunks:
-            raise RuntimeError(
-                "Nenhum chunk foi gerado. Verifique se data/prf_es_clean.csv existe."
-            )
-        chunks, index = _build_index(chunks, model)
+    # --- TRAVA ADICIONADA AQUI ---
+    with _lock:
+        if _pipeline is not None:
+            return _pipeline
 
-    _pipeline = {"model": model, "chunks": chunks, "index": index}
-    return _pipeline
+        model = _load_model()
+        cache = _load_index_from_cache()
+        if cache is not None:
+            chunks, index = cache
+        else:
+            chunks = chunk_documents(load_documents())
+            if not chunks:
+                raise RuntimeError(
+                    "Nenhum chunk foi gerado. Verifique se data/prf_es_clean.csv existe."
+                )
+            chunks, index = _build_index(chunks, model)
+
+        _pipeline = {"model": model, "chunks": chunks, "index": index}
+        return _pipeline
 
 
 # ---------------------------------------------------------------------------
