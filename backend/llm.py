@@ -1,11 +1,10 @@
-from __future__ import annotations
-
-import logging
+from groq import Groq
 import os
 import time
 from typing import Any
 from groq import APIConnectionError, APIStatusError, AuthenticationError, Groq, RateLimitError
 from dotenv import load_dotenv
+import logging
 
 logger = logging.getLogger("backend.llm")
 
