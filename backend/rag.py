@@ -7,7 +7,7 @@ import unicodedata
 import threading  
 from pathlib import Path
 from typing import Any
-from backend.llm import generate_response  # import tardio
+from llm import generate_response
 import faiss
 import pandas as pd
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -41,8 +41,7 @@ COUNT_RE = re.compile(r"\b(quantos|quantas|quantidade|total|numero)\b")
 DOMAIN_RE = re.compile(
     r"acident|mort|ferid|vitim|colis|rodovia|transito|atropel|capot|tombament|\bbr\b|\bbr[- ]?\d"
 )
-RANKING_RE = re.compile(r"\b(mais|maior|maiores|ranking|top|quais municipios)\b")
-
+RANKING_RE = re.compile(r"\b(mais|maior|maiores|ranking|top|quais municipios|pior|comum|frequente)\b")
 
 def _norm(text: Any) -> str:
     """minúsculas e sem acentos, para comparar nomes de municípios."""
@@ -64,7 +63,7 @@ def _load_accidents(csv_path: Path) -> list[dict[str, str]]:
     for idx, row in df.iterrows():
         match_ano = re.search(r"\d{4}", str(row["data_inversa"]))
         text = (
-            f"Acidente em {row['data_inversa']}, na rodovia BR-{row['br']}, "
+            f"Acidente em {row['data_inversa']} às {row['horario']}, na rodovia BR-{row['br']}, "
             f"km {row['km']}, município de {row['municipio']}. "
             f"Tipo: {row['tipo_acidente']}. "
             f"Classificação: {row['classificacao_acidente']}. "
@@ -275,11 +274,11 @@ def _stats_context(question: str, filters: dict[str, list[str]]) -> dict[str, st
     return {"texto": texto, "fonte": "prf_es_clean.csv (estatísticas calculadas com pandas)"}
 
 def _ranking_context(question: str, filters: dict[str, list[str]]) -> dict[str, str] | None:
-    """Calcula o ranking de municípios com mais acidentes usando Pandas."""
+    """Calcula o ranking dinâmico de acidentes usando Pandas."""
     df = _get_df()
     mask = pd.Series(True, index=df.index)
     
-    # Aplica filtros se existirem (ex: se o usuário perguntar de um ano específico)
+    # Aplica filtros se existirem
     if filters["municipio"]:
         mask &= df["_mun"].isin(filters["municipio"])
     if filters["br"]:
@@ -291,14 +290,44 @@ def _ranking_context(question: str, filters: dict[str, list[str]]) -> dict[str, 
     if sub.empty:
         return None
 
-    # Agrupa por município, conta e pega os 10 maiores
-    top_municipios = sub['municipio'].value_counts().head(10)
+    q_lower = question.lower()
     
-    texto = f"Ranking dos 10 municípios com mais acidentes (Total geral na base: {len(sub)} acidentes):\n"
-    for mun, count in top_municipios.items():
-        texto += f"- {mun}: {count} acidentes\n"
+    # Identifica o que o usuário quer rankear
+    if "horário" in q_lower or "horario" in q_lower or "hora" in q_lower:
+        horas = pd.to_datetime(sub['horario'], format='%H:%M:%S', errors='coerce').dt.hour
+        top_dados = horas.value_counts().head(10)
+        titulo = "horários (em formato 0-23h)"
+    elif "clima" in q_lower or "tempo" in q_lower or "meteorol" in q_lower:
+        top_dados = sub['condicao_metereologica'].value_counts().head(10)
+        titulo = "condições climáticas"
+    elif "causa" in q_lower or "motivo" in q_lower:
+        top_dados = sub['causa_acidente'].value_counts().head(10)
+        titulo = "causas de acidente"
+    elif "rodovia" in q_lower or "br" in q_lower:
+        top_dados = sub['br'].value_counts().head(10)
+        titulo = "rodovias (BRs)"
+    elif "tipo" in q_lower:
+        top_dados = sub['tipo_acidente'].value_counts().head(10)
+        titulo = "tipos de acidente"
+    elif "dia da semana" in q_lower or "semana" in q_lower:
+        top_dados = sub['dia_semana'].value_counts().head(10)
+        titulo = "dias da semana"
+    elif "fase do dia" in q_lower or "turno" in q_lower:
+        top_dados = sub['fase_dia'].value_counts().head(10)
+        titulo = "fases do dia"
+    elif "gravidade" in q_lower or "classifica" in q_lower:
+        top_dados = sub['classificacao_acidente'].value_counts().head(10)
+        titulo = "classificações de gravidade"
+    else:
+        top_dados = sub['municipio'].value_counts().head(10)
+        titulo = "municípios"
+    
+    texto = f"Ranking dos 10 {titulo} mais frequentes (Total geral na base: {len(sub)} acidentes):\n"
+    for item, count in top_dados.items():
+        if pd.notna(item):
+            texto += f"- {item}: {count} ocorrências\n"
 
-    return {"texto": texto, "fonte": "prf_es_clean.csv (ranking calculado)"}
+    return {"texto": texto, "fonte": "prf_es_clean.csv (ranking calculado dinamicamente)"}
 
 # ---------------------------------------------------------------------------
 # 5. Busca semântica (FAISS) respeitando os filtros da pergunta
@@ -355,20 +384,20 @@ def answer(question: str) -> dict[str, Any]:
     filters = parse_filters(question)
     q = _norm(question)
     is_count = bool(COUNT_RE.search(q)) and (bool(DOMAIN_RE.search(q)) or any(filters.values()))
+    is_ranking = bool(RANKING_RE.search(q))
 
     chunks: list[dict[str, str]] = []
     if is_count:
         stats = _stats_context(question, filters)
         if stats:
             chunks = [stats]
+    elif is_ranking:
+        ranking = _ranking_context(question, filters)
+        if ranking:
+            chunks = [ranking]
+            
     if not chunks:
         chunks = search_chunks(question, top_k=TOP_K)
-
-    if not chunks:
-        return {
-            "resposta": "Não encontrei informação suficiente na base para responder.",
-            "fontes": [],
-        }
 
 
     response = generate_response(_build_prompt(question, chunks))

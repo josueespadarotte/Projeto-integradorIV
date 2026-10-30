@@ -17,7 +17,7 @@ logger = logging.getLogger("backend")
 # ---------------------------------------------------------------------------
 # Integração com o componente de IA
 # ---------------------------------------------------------------------------
-from backend.rag import answer as responder, _get_pipeline  # <-- ADICIONADO O _get_pipeline AQUI
+from rag import answer as responder, _get_pipeline  # <-- ADICIONADO O _get_pipeline AQUI
 
 
 # ---------------------------------------------------------------------------
